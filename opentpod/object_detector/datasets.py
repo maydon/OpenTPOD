@@ -148,7 +148,7 @@ def dump_detector_annotations(db_detector, db_tasks, db_user, scheme, host):
             count += 1
         elif (str(db_task).endswith('.pbtxt')):
             filePath = os.path.abspath(db_task.get_data_dirname() + "/../.upload/" + str(db_task))
-            logger.info(filePath)
+            # logger.info(filePath)
             with open(filePath, 'r') as f:
                 content = f.read()
                 # labelsForHere = []
@@ -156,7 +156,7 @@ def dump_detector_annotations(db_detector, db_tasks, db_user, scheme, host):
                 text_format.Merge(content, cur_label_map)
                 for item in cur_label_map.item:
                     if item.name not in labels:
-                        logger.info(item.name)
+                        # logger.info(item.name)
                         labels.append(item.name)
         else:
             task_annotations_file_path = dump_cvat_task_annotations(
@@ -178,30 +178,24 @@ def dump_detector_annotations(db_detector, db_tasks, db_user, scheme, host):
     _dump_labelmap_file(labels, output_labelmap_file_path)
     split_train_eval_tfrecord(output_dir)
 
-
-def getXml(xmlfile, storage_path, tasknum):
+def getXml(xmlfile, tasknum):
     tree = parse(xmlfile)
     root = tree.documentElement
-    # print(root.nodeName)
     filename = root.getElementsByTagName('filename')[0].childNodes[0].data
-    # logger.info(filename.split('_')[1])
-    # logger.info(int(filename.split('_')[1]))
     filename = int(filename.split('_')[1])
     filename = str(filename) + '.jpg'
-    fileinstorage = os.path.join('gs://', storage_path, 'data', tasknum, filename)
     width = float(root.getElementsByTagName('width')[0].childNodes[0].data)
     height = float(root.getElementsByTagName('height')[0].childNodes[0].data)
     obj = root.getElementsByTagName('object')
-    strpre = 'UNASSIGNED' + ',' + fileinstorage + ','
-    result = ""
+    result = []
     for i in obj:
         name = i.getElementsByTagName("name")[0].childNodes[0].data
         xmin = float(i.getElementsByTagName("xmin")[0].childNodes[0].data) / width
         ymin = float(i.getElementsByTagName("ymin")[0].childNodes[0].data) / height
         xmax = float(i.getElementsByTagName("xmax")[0].childNodes[0].data) / width
         ymax = float(i.getElementsByTagName("ymax")[0].childNodes[0].data) / height
-        strafter = strpre + name + ',' + str(xmin) + ',' + str(ymin) + ',,,' + str(xmax) + ',' + str(ymax) + ',,\n'
-        result += strafter
+        strafter = ',' + name + ',' + str(xmin) + ',' + str(ymin) + ',,,' + str(xmax) + ',' + str(ymax) + ',,\n'
+        result.append((tasknum, filename, strafter))
 
     return result
 
@@ -224,7 +218,7 @@ def dump_detector_annotations4google_cloud(
     dump_format = 'PASCAL VOC ZIP 1.0'
 
     # call cvat dump tool on each video in the trainset
-    result = ""
+    result = []
     for db_task in db_tasks:
         task_annotations_file_path_pascal = dump_cvat_task_annotations(
             db_task, db_user, scheme, host, format_name=dump_format)
@@ -250,7 +244,7 @@ def dump_detector_annotations4google_cloud(
         
         for fp in filedir:
             # logger.info(fp)
-            result += getXml(os.path.join(xmlpath, fp), db_detector.name, tasknum)
+            result += getXml(os.path.join(xmlpath, fp), tasknum)
 
         for root, dirs, files in os.walk(data):
             if len(files) != 0:
@@ -264,10 +258,7 @@ def dump_detector_annotations4google_cloud(
             # print(sorted(files))
             # print()
         # print(result)
-    writecsv = open(os.path.join(output_dir, 'info.csv'), 'w+')
-    writecsv.write(result)
-    writecsv.close()
-
+    return result
 
 
 def split_train_eval_tfrecord(data_dir):
